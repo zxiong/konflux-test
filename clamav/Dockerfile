@@ -70,4 +70,3 @@ RUN ARCH="$(uname -m)" && \
     rm oc.tar.gz
 
 ENTRYPOINT ["/entrypoint.sh"]
-

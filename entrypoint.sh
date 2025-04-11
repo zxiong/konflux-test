@@ -22,4 +22,3 @@ echo "  clamscan /scan               # Standalone scan"
 echo "  clamdscan /scan              # Fast scan via clamd"
 echo ""
 exec /bin/bash
-
