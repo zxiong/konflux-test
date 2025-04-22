@@ -7,11 +7,19 @@ RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.
     microdnf -y --setopt=tsflags=nodocs install \
     clamav \
     clamd \
+    clamav-server \
     clamav-update \
     jq \
     tar \
     skopeo \
     && microdnf clean all
+
+# Add clamav user and group
+RUN groupadd -r clamav && useradd -r -g clamav clamav
+
+# Create necessary directories
+RUN mkdir -p /var/run/clamd.scan /var/log/clamav /var/lib/clamav && \
+    chmod -R 0777 /var/run/clamd.scan /var/log/clamav /var/lib/clamav
 
 COPY ./test/utils.sh /utils.sh
 
@@ -24,6 +32,9 @@ COPY clamav/whitelist.ign2 /var/lib/clamav/whitelist.ign2
 COPY policies $POLICY_PATH
 COPY test/conftest.sh $POLICY_PATH
 
+# Update clamd config
+COPY clamav/scan.conf /etc/clamd.d/scan.conf
+
 # Download and install oc
 RUN ARCH="$(uname -m)" && \
     curl -fsSL https://mirror.openshift.com/pub/openshift-v4/"$ARCH"/clients/ocp/stable/openshift-client-linux.tar.gz --output oc.tar.gz && \
@@ -31,4 +42,6 @@ RUN ARCH="$(uname -m)" && \
     tar -xzvf oc.tar.gz -C /usr/bin && \
     rm oc.tar.gz
 
-ENTRYPOINT ["/usr/bin/clamscan"]
+# Expose scan socket
+VOLUME ["/scan"]
+VOLUME ["/var/run/clamd.scan"]
