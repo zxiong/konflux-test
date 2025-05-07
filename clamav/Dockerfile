@@ -71,3 +71,5 @@ RUN ARCH="$(uname -m)" && \
     cp oc.tar.gz /usr/bin/oc && \
     tar -xzvf oc.tar.gz -C /usr/bin && \
     rm oc.tar.gz
+
+ENTRYPOINT ["/usr/bin/clamdscan"]
