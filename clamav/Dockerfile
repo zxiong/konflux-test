@@ -72,6 +72,6 @@ RUN ARCH="$(uname -m)" && \
     tar -xzvf oc.tar.gz -C /usr/bin && \
     rm oc.tar.gz
 
-COPY start-clamd.sh /start-clamd.sh
+COPY clamav/start-clamd.sh /start-clamd.sh
 
-ENTRYPOINT ["start-clamd.sh"]
+ENTRYPOINT ["/start-clamd.sh"]
