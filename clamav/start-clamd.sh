@@ -1,21 +1,35 @@
 #!/bin/bash
+set -e
+
+CONF_FILE="/etc/clamd.d/scan.conf"
+MAX_THREADS="${MAX_THREADS:-8}" 
+SOCKET="/var/run/clamd.scan/clamd.sock"
+TIMEOUT=30
+elapsed=0
+
+# Update MaxThreads setting in clamd config
+if grep -q '^MaxThreads' "$CONF_FILE"; then
+  sed -i "s/^MaxThreads.*/MaxThreads $MAX_THREADS/" "$CONF_FILE"
+else
+  echo "MaxThreads $MAX_THREADS" >> "$CONF_FILE"
+fi
 
 # Start clamd in background
-echo "[+] Starting clamd..."
-/usr/sbin/clamd -c /etc/clamd.d/scan.conf --foreground=false &
+/usr/sbin/clamd -c "${CONF_FILE}" --foreground=false &
 
 # Wait for the socket to be created
-echo "[+] Waiting for clamd to be ready..."
-for i in {1..30}; do
-    if [ -S /var/run/clamd.scan/clamd.sock ]; then
-        echo "[+] clamd is ready!"
-        break
-    fi
-    sleep 1
+while [ ! -S "$SOCKET" ]; do
+  sleep 1
+  elapsed=$((elapsed + 1))
+  if [ "$elapsed" -ge "$TIMEOUT" ]; then
+    echo "Failed to start clamd"
+    exit 1
+  fi
 done
 
-# If command arguments are provided, run them
+echo "clamd is ready!"
+
+# Run the user-provided command (if any)
 if [ $# -gt 0 ]; then
-    echo "[+] Running: $@"
-    exec "$@"
+  exec "$@"
 fi
