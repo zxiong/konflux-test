@@ -244,28 +244,28 @@ parse_image_url() {
 get_image_registry_and_repository() {
   local image_url=$1
 
-  parse_image_url "$image_url" | jq -jr '.registry_repository'
+  jq -jr '.registry_repository' <<< "$(parse_image_url "$image_url")"
 }
 
 # Helper function to just get the pullspec in repository:tag format
 get_image_registry_repository_tag() {
   local image_url=$1
 
-  parse_image_url "$image_url" | jq -jr '.registry_repository + if .tag != "" then ":" + .tag else "" end'
+  jq -jr '.registry_repository + if .tag != "" then ":" + .tag else "" end' <<< "$(parse_image_url "$image_url")"
 }
 
 # Helper function to just get the pullspec in repository:tag@digest format
 get_image_registry_repository_tag_digest() {
   local image_url=$1
 
- parse_image_url "$image_url" | jq -jr '.registry_repository + if .tag != "" then ":" + .tag else "" end + if .digest != "" then "@" + .digest else "" end'
+ jq -jr '.registry_repository + if .tag != "" then ":" + .tag else "" end + if .digest != "" then "@" + .digest else "" end' <<< "$(parse_image_url "$image_url")"
 }
 
 # Helper function to just get the pullspec in repository@digest format
 get_image_registry_repository_digest() {
   local image_url=$1
 
-  parse_image_url "$image_url" | jq -jr '.registry_repository + if .digest != "" then "@" + .digest else "" end'
+  jq -jr '.registry_repository + if .digest != "" then "@" + .digest else "" end' <<< "$(parse_image_url "$image_url")"
 }
 
 # The function will be used by the tekton tasks of build-definitions
@@ -783,7 +783,7 @@ get_image_labels() {
     exit 1
   fi
 
-  echo "${image_labels}" | jq -jr '.Labels // {} | to_entries[] | "\(.key)=\(.value)\n"'
+  jq -jr '.Labels // {} | to_entries[] | "\(.key)=\(.value)\n"' <<< "${image_labels}"
 }
 
 # This function will be used by tekton tasks in build-definitions
@@ -805,7 +805,7 @@ get_image_annotations() {
     echo "get_image_annotations: failed to inspect the image" >&2
     exit 1
   fi
-  echo "${image_annotations}" | jq -jr 'if .annotations != null then .annotations | to_entries[] | "\(.key)=\(.value)\n" else "" end'
+  jq -jr 'if .annotations != null then .annotations | to_entries[] | "\(.key)=\(.value)\n" else "" end' <<< "${image_annotations}"
 }
 
 # This function will be used by tekton tasks in build-definitions
@@ -826,7 +826,7 @@ extract_related_images_from_bundle(){
   # opm render on a bundle will always add the bundle. We want to make sure that
   # we strip that out.
   jq_related_images='[.relatedImages[]?.image] - ["'${image}'"] | .[]'
-  related_images=$(echo "${bundle_render_out}" | tr -d '\000-\031' | jq -r "$jq_related_images")
+  related_images=$(tr -d '\000-\031' <<< "${bundle_render_out}" | jq -r "$jq_related_images")
 
   echo "${related_images}" | tr ' ' '\n'
 }
