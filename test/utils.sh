@@ -195,42 +195,44 @@ parse_image_url() {
     exit 2
   fi
 
-  digest=""
-  tag=""
-  registry_repository="$(echo -n "$image_url" | cut -d@ -f1)"
+  local digest=""
+  local tag=""
+  local registry_repository
 
-  # Digest will be the last portion after an "@"
-  at_number=$(echo -n "$image_url" | tr -cd "@" | wc -c | tr -d '[:space:]')
-  colon_number=$(echo -n "$registry_repository" | tr -cd ":" | wc -c | tr -d '[:space:]')
+  # Count '@' chars without forking: ${image_url//[^@]/} removes all non-@ chars
+  local temp_ats="${image_url//[^@]/}"
+  local at_number="${#temp_ats}" # Get the length
+
   if [[ $at_number == 1 ]]; then
-    digest="$(echo -n "${image_url}" | cut -d@ -f2)"
+    # Get digest: ${image_url##*@} keeps everything after the last @
+    digest="${image_url##*@}"
+    # Get repo: ${image_url%@*} removes everything after and including the last @
+    registry_repository="${image_url%@*}"
   elif [[ $at_number != 0 ]]; then
-    # The only other supported format is registry/repository
     echo "parse_image_url: $image_url does not match the format registry(:port)/repository(:tag)(@digest)"
     exit 3
+  else
+    registry_repository="$image_url"
   fi
 
-  # Isolate to find the tag and name
-  # Trim off digest
-  registry_repository="$(echo -n "$image_url" | cut -d@ -f1)"
-  if [[ $colon_number == 2 ]]; then
-    # format is now registry:port/repository:tag
-    # trim off everything after the last colon
-    tag=${registry_repository##*:}
-    registry_repository=${registry_repository%:*}
-  elif [[ $colon_number == 1 ]]; then
-    # we have either a port or a tag so inspect the content after
-    # the colon to determine if it is a valid tag.
-    # https://github.com/opencontainers/distribution-spec/blob/main/spec.md
-    # [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} is the regex for a valid tag
-    # If not a valid tag, leave the colon alone.
-    if [[ "$(echo -n "$registry_repository" | cut -d: -f2 | tr -d '[:space:]')" =~ ^([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})$ ]]; then
-      # We match a tag so trim it off
-      tag=$(echo -n "$registry_repository" | cut -d: -f2)
-      registry_repository=$(echo -n "$registry_repository" | cut -d: -f1)
+  # Count ':' chars in the repo part
+  local temp_colons="${registry_repository//[^:]/}"
+  local colon_number="${#temp_colons}"
+
+  if [[ $colon_number == 1 ]]; then
+    # Get potential tag: ${registry_repository##*:}
+    local potential_tag="${registry_repository##*:}"
+    # Check if it's a valid tag vs. a port number
+    if [[ "$potential_tag" =~ ^([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})$ ]]; then
+      tag="$potential_tag"
+      # Remove tag: ${registry_repository%:*}
+      registry_repository="${registry_repository%:*}"
     fi
+  elif [[ $colon_number == 2 ]]; then
+    # format is registry:port/repository:tag
+    tag="${registry_repository##*:}"
+    registry_repository="${registry_repository%:*}"
   elif [[ $colon_number != 0 ]]; then
-    # The only other supported format is registry/repository
     echo "parse_image_url: $image_url does not match the format registry(:port)/repository(:tag)(@digest)"
     exit 3
   fi
@@ -863,24 +865,27 @@ replace_image_pullspec() {
     exit 2
   fi
 
-  local image_regex="^([^:@]+)(:[^@]+)?(@sha256:[a-f0-9]{64})?$"
-  if [[ "$image" =~ $image_regex ]]; then
-    local digest=""
-    if [[ "$image" =~ (@sha256:[a-f0-9]{64}) ]]; then
-      digest=$(echo "$image" | sed -E 's/^.*(@sha256:[a-f0-9]{64})$/\1/')
-      image=${image%%@*}
-    fi
+  local digest=""
+  local tag=""
+  local repo_part="$image"
 
-    local tag=""
-    if [[ "$image" =~ (:[^@]+) ]]; then
-      tag=$(echo "$image" | sed -E 's/^.*(:[^@]+).*$/\1/')
-    fi
-
-    echo "${mirror}${tag}${digest}"
-  else
-    echo "replace_image_pullspec: invalid pullspec format: ${image}" >&2
-    exit 2
+  # Extract digest: ${image##*@}
+  if [[ "$image" == *@* ]]; then
+    digest="@${image##*@}"
+    # Remove digest part: ${image%@*}
+    repo_part="${image%@*}"
   fi
+
+  # Extract tag: ${repo_part##*:}
+  # Check if a colon exists *and* it's a valid tag format, not a port
+  if [[ "$repo_part" == *:* ]]; then
+    local potential_tag="${repo_part##*:}"
+    if [[ "$potential_tag" =~ ^([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})$ ]]; then
+      tag=":${potential_tag}"
+    fi
+  fi
+  
+  echo -n "${mirror}${tag}${digest}"
 }
 
 # This function will be used by tasks in tekton-integration-catalog
